@@ -1,0 +1,29 @@
+---
+- name: Create user and generate keys on Headscale VPN server
+  hosts: headscale_server
+  become: yes
+  tasks:
+    - name: Create user on Headscale VPN server
+      shell: "headscale user create dropletuser"
+
+    - name: Generate keys for the user
+      shell: "headscale --user dropletuser preauthkeys create --expiration 1h"
+      register: key_generation_output
+
+- name: Connect machine to Headscale server with generated keys
+  hosts: localhost
+  become: yes
+  tasks:
+    - name: Install Tailscale
+      shell: "curl -fsSL https://tailscale.com/install.sh | sh"
+      become: yes
+      changed_when: false
+
+    - name: Retrieve generated key
+      set_fact:
+        auth_key: "{{ key_generation_output.stdout }}"
+
+    - name: Connect machine to Headscale server
+      shell: "tailscale up --auth-key={{ auth_key }} --login-server=http://68.183.10.25:8080"
+      register: tailscale_output
+      changed_when: "'headscale' in tailscale_output.stdout"
